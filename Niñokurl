@@ -1,0 +1,216 @@
+
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090d1c">
+<title>Niñokurl Math Solver</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#30205f,#090d1c 65%);color:white;font:16px Arial,sans-serif}
+.app{max-width:650px;margin:auto;min-height:100dvh;display:flex;flex-direction:column;padding:12px;gap:12px}
+header{padding:18px;border-radius:20px;background:linear-gradient(120deg,#2563eb,#9333ea);box-shadow:0 0 25px #743cff44}
+h1{font-size:23px;margin:0}
+header p{margin:7px 0 0;font-size:12px}
+.panel{background:#11182b;border:1px solid #303c5d;border-radius:18px;overflow:hidden}
+#chat{height:52dvh;min-height:270px;overflow:auto;padding:14px}
+.msg{white-space:pre-wrap;overflow-wrap:anywhere;max-width:95%;padding:12px;margin:10px 0;border-radius:14px;line-height:1.5}
+.bot{background:#26334f;border:1px solid #39496c}
+.me{margin-left:auto;background:linear-gradient(120deg,#2563eb,#7c3aed)}
+form{display:flex;gap:7px;padding:10px;border-top:1px solid #303c5d}
+input[type=text]{flex:1;min-width:0;background:#090f20;color:white;border:1px solid #39496c;border-radius:12px;padding:13px;font-size:16px}
+button{border:0;border-radius:11px;padding:11px;background:linear-gradient(120deg,#3978ff,#9333ea);color:white;font-weight:bold}
+.tools{display:flex;gap:7px;flex-wrap:wrap;padding:10px}
+.tools button{background:#26334f;border:1px solid #455579}
+#history{padding:14px;display:none}
+small{color:#c3cce4}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+<h1>⚡ Niñokurl Math Solver</h1>
+<p>Anime Math AI • Solve step by step 🧮</p>
+</header>
+
+<div class="panel">
+<div id="chat" aria-live="polite">
+<div class="msg bot">Konnichiwa, Math Hero! ✨
+Ilagay ang math problem mo.
+Halimbawa: 25 * 14
+2x + 5 = 17
+sqrt(144)</div>
+</div>
+<form id="form">
+<input id="q" type="text" placeholder="Ilagay ang math problem..." required>
+<button type="submit">Solve</button>
+</form>
+<div class="tools">
+<button type="button" id="voice">🎙️ Voice</button>
+<button type="button" id="speak">🔊 Basahin</button>
+<button type="button" id="photo">📷 Photo</button>
+<button type="button" id="hist">📚 History</button>
+<button type="button" id="clear">🗑️ Clear</button>
+<input id="file" type="file" accept="image/*" capture="environment" hidden>
+</div>
+</div>
+
+<div id="history" class="panel">
+<b>📚 Saved History</b>
+<div id="historyList"></div>
+<button id="back" type="button">Balik sa Solver</button>
+</div>
+<small>Built-in math mode • Walang API key</small>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const chat=$('chat');
+const KEY='ninokurl_math_history_v2';
+let history=[];
+try{history=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){history=[]}
+
+function save(){
+ try{localStorage.setItem(KEY,JSON.stringify(history))}catch(e){}
+ renderHistory();
+}
+function add(text,who='bot'){
+ const d=document.createElement('div');
+ d.className='msg '+(who==='me'?'me':'bot');
+ d.textContent=text;
+ chat.appendChild(d);
+ chat.scrollTop=chat.scrollHeight;
+ history.push({text,who});
+ save();
+}
+function gcd(a,b){
+ a=Math.abs(a);b=Math.abs(b);
+ while(b){const t=b;b=a%b;a=t}
+ return a||1;
+}
+function solve(s){
+ s=s.trim().replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
+ if(!s)return 'Maglagay muna ng math problem.';
+
+ // Linear equation: ax+b=c
+ const eq=s.replace(/\s+/g,'').match(/^(-?\d*\.?\d*)x([+-]\d+(?:\.\d+)?)=(-?\d+(?:\.\d+)?)$/i);
+ if(eq){
+  let a=eq[1];
+  a=a===''||a==='+'?1:a==='-'?-1:Number(a);
+  const b=Number(eq[2]),c=Number(eq[3]);
+  if(a===0)return 'Hindi valid ang coefficient ng x.';
+  const x=(c-b)/a;
+  return `Problem: ${s}\n\nStep 1: Ilipat ang constant sa kabila.\n${a}x = ${c} - (${b})\n\nStep 2: ${a}x = ${c-b}\n\nStep 3: Hatiin sa ${a}.\n\nSagot: x = ${Number(x.toFixed(8))}`;
+ }
+
+ // Fractions with addition/subtraction
+ const fr=s.match(/^(-?\d+)\s*\/\s*(\d+)\s*([+-])\s*(\d+)\s*\/\s*(\d+)$/);
+ if(fr){
+  let a=+fr[1],b=+fr[2],c=+fr[4],d=+fr[5];
+  if(!b||!d)return 'Hindi puwedeng zero ang denominator.';
+  if(fr[3]==='-')c=-c;
+  let n=a*d+c*b,den=b*d,g=gcd(n,den);
+  return `Step 1: Hanapin ang common denominator: ${b*d}.\nStep 2: ${a*d} ${fr[3]} ${Math.abs(c*b)} = ${n}.\nStep 3: I-simplify ang fraction.\n\nSagot: ${n/g}/${den/g}${den/g===1?' = '+n/g:''}`;
+ }
+
+ // Safe arithmetic parser (no eval or Function)
+ let tokens=s.replace(/\bsqrt\s*\(/gi,'sqrt(').match(/\d+(?:\.\d+)?|sqrt|[()+\-*/%^]/gi);
+ if(!tokens||tokens.join('')!==s.replace(/\s+/g,'').replace(/sqrt\s*\(/gi,'sqrt('))
+  return 'Hindi ko maintindihan ang expression. Subukan ang 25 * 14 o sqrt(144).';
+
+ let i=0;
+ function primary(){
+  let t=tokens[i++];
+  if(t==='('){let v=expression();if(tokens[i++]!==')')throw Error();return v}
+  if(t==='sqrt'){if(tokens[i++]!=='(')throw Error();let v=expression();if(tokens[i++]!==')'||v<0)throw Error();return Math.sqrt(v)}
+  if(t==='+')return primary();
+  if(t==='-')return -primary();
+  if(t!==undefined&&!isNaN(Number(t)))return Number(t);
+  throw Error();
+ }
+ function power(){let a=primary();if(tokens[i]==='^'){i++;a=Math.pow(a,power())}return a}
+ function mul(){let a=power();while(['*','/','%'].includes(tokens[i])){let op=tokens[i++],b=power();if((op==='/'||op==='%')&&b===0)throw Error();a=op==='*'?a*b:op==='/'?a/b:a%b}return a}
+ function expression(){let a=mul();while(tokens[i]==='+'||tokens[i]==='-'){let op=tokens[i++],b=mul();a=op==='+'?a+b:a-b}return a}
+ try{
+  const answer=expression();
+  if(i!==tokens.length||!Number.isFinite(answer))throw Error();
+  const out=Number(answer.toPrecision(10));
+  return `Problem: ${s}\n\nStep 1: Sundin ang order of operations.\nStep 2: I-compute ang bawat operation.\nStep 3: Suriin ang resulta.\n\nSagot: ${out}`;
+ }catch(e){
+  return 'Hindi valid o suportado ang problem na ito. Subukan ang 25 * 14, 3/4 + 2/5, sqrt(144), o 2x + 5 = 17.';
+ }
+}
+
+$('form').onsubmit=e=>{
+ e.preventDefault();
+ const s=$('q').value.trim();
+ if(!s)return;
+ add(s,'me');
+ $('q').value='';
+ add(solve(s));
+};
+function renderHistory(){
+ const list=$('historyList');
+ if(!list)return;
+ list.replaceChildren();
+ if(!history.length){list.textContent='Wala pang history.';return}
+ history.slice().reverse().forEach(item=>{
+  const p=document.createElement('p');
+  p.textContent=(item.who==='me'?'Ikaw: ':'Niñokurl: ')+item.text;
+  list.appendChild(p);
+ });
+}
+$('hist').onclick=()=>{
+ $('history').style.display='block';
+ renderHistory();
+};
+$('back').onclick=()=>{$('history').style.display='none'};
+$('clear').onclick=()=>{
+ if(confirm('Burahin ang lahat ng chat?')){
+  history=[];
+  save();
+  chat.replaceChildren();
+  const d=document.createElement('div');
+  d.className='msg bot';
+  d.textContent='Handa na ulit ako! ✨';
+  chat.appendChild(d);
+ }
+};
+$('voice').onclick=()=>{
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){alert('Hindi suportado ang voice input sa browser na ito. Subukan ang Chrome.');return}
+ const r=new SR();
+ r.lang='fil-PH';
+ r.onresult=e=>{$('q').value=e.results[0][0].transcript};
+ r.onerror=()=>alert('Payagan ang microphone sa browser settings.');
+ r.start();
+};
+$('speak').onclick=()=>{
+ if(!('speechSynthesis'in window)){alert('Hindi suportado ang voice reply.');return}
+ const last=[...chat.querySelectorAll('.bot')].pop();
+ if(last){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(last.textContent))}
+};
+$('photo').onclick=()=>$('file').click();
+$('file').onchange=e=>{
+ const f=e.target.files[0];if(!f)return;
+ const d=document.createElement('div');d.className='msg me';
+ const img=document.createElement('img');
+ img.src=URL.createObjectURL(f);img.alt='Math problem photo';
+ img.style.cssText='max-width:100%;max-height:260px;border-radius:10px';
+ d.appendChild(img);chat.appendChild(d);
+ add('Nakuha ang larawan. Sa bersyong ito, i-type ang equation dahil wala pang automatic OCR/image math reading.');
+ e.target.value='';
+};
+if(history.length){
+ chat.replaceChildren();
+ history.forEach(item=>{
+  const d=document.createElement('div');
+  d.className='msg '+(item.who==='me'?'me':'bot');
+  d.textContent=item.text;chat.appendChild(d);
+ });
+}
+renderHistory();
+</script>
+</body>
+</html>
